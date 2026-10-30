@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relevé technique volet roulant</title>
+<link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem('theme');if(t)document.documentElement.dataset.theme=t}catch(e){}
+function toggleTheme(){
+  const d=document.documentElement;
+  const now=d.dataset.theme||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+  const next=now==='dark'?'light':'dark';
+  d.dataset.theme=next;
+  try{localStorage.setItem('theme',next)}catch(e){}
+}
+</script>
+</head>
+<body>
+
+<div id="login" hidden>
+  <form onsubmit="login();return false">
+    <h2>Connexion</h2>
+    <input id="em" type="email" placeholder="Email" autocomplete="username" required>
+    <input id="pw" type="password" placeholder="Mot de passe" autocomplete="current-password" required>
+    <div id="err"></div>
+    <button class="p" type="submit">Se connecter</button>
+  </form>
+</div>
+
+<aside>
+  <h2>📋 Relevés</h2>
+  <div id="st">⏳ Connexion…</div>
+  <div class="btns">
+    <button onclick="toggleTheme()">🌙 Mode sombre / clair</button>
+    <button class="p" onclick="showView('cal')">📅 Calendrier</button>
+    <button class="met" onclick="nouveau()">+ Nouveau</button>
+    <button class="edit" onclick="save()">💾 Enregistrer</button>
+    <button onclick="window.print()">🖨️ PDF / Imprimer</button>
+    <button class="d edit" onclick="suppr()">🗑️ Supprimer</button>
+    <button class="edit" onclick="exportJSON()">⬇️ Sauvegarde</button>
+    <button onclick="logout()">🔒 Déconnexion</button>
+  </div>
+  <details open class="edit"><summary>Mes relevés</summary><div id="list"></div></details>
+</aside>
+
+<main>
+<div id="calv" hidden>
+  <div class="cnav">
+    <button onclick="moveCal(-1)">◀</button>
+    <h2 id="ct"></h2>
+    <button onclick="moveCal(1)">▶</button>
+  </div>
+  <div class="cg" id="cg"></div>
+  <div class="leg edit">🟢 Date confirmée (visible par le poseur) &nbsp; 🟠 À confirmer (invisible pour le poseur)</div>
+</div>
+
+<div class="sheet" id="sheet">
+  <div class="top">
+    <div class="l">Le Service Pose<b>LEROY MERLIN</b></div>
+    <div class="r">VOLET ROULANT RENOV.</div>
+  </div>
+  <div class="cols">
+    <div class="left">
+      <div class="sec"><h3>RELEVÉ TECHNIQUE</h3>
+        <label class="f"><span>Date</span><input type="date" name="date"></label>
+        <label class="f"><span>Artisan</span><input type="text" name="artisan"></label>
+        <label class="f"><span>Client</span><input type="text" name="client"></label>
+        <label class="f"><span>Tél</span><input type="tel" name="tel"></label>
+        <label class="f"><span>📅 Pose le</span><input type="date" name="pose_date"></label>
+        <label class="f"><span>Heure</span><input type="time" name="pose_heure"></label>
+        <div id="confbox">
+          <label class="cb"><input type="checkbox" id="conf" onchange="confNote()"> Date confirmée</label>
+          <small id="confnote"></small>
+        </div>
+        <div>Remarque sur l’accès au chantier :</div><textarea name="acces"></textarea>
+      </div>
+      <div class="sec"><h3>Travaux préparatoires</h3>
+        <div>Dépose : <label class="cb"><input type="checkbox" name="dep_client"> Client</label><label class="cb"><input type="checkbox" name="dep_lm"> LM</label></div>
+        <div>Si LM quoi ?</div><textarea name="dep_quoi"></textarea>
+        <div>Mise à la décharge : <label class="cb"><input type="checkbox" name="dech_client"> Client</label><label class="cb"><input type="checkbox" name="dech_lm"> LM</label></div>
+      </div>
+      <div class="sec"><h3>Matériel particulier à prévoir</h3><textarea name="materiel"></textarea></div>
+      <div class="sec"><h3>Travaux spécifiques</h3>
+        <small>(dessin possible tout en bas)</small>
+        <div>Nature précise :</div><textarea name="specifiques" style="min-height:200px"></textarea>
+        <label class="f"><span style="min-width:150px">Durée estimée (h)</span><input type="text" name="duree"></label>
+      </div>
+    </div>
+    <div class="right">
+      <div class="sec noprint edit">
+        <button onclick="setNv(nv+1)">+ Ajouter un volet</button>
+        <button onclick="setNv(nv-1)">− Retirer</button>
+      </div>
+      <div class="tw"><table id="tbl"></table></div>
+    </div>
+  </div>
+  <div class="sec" style="text-align:center;border-top:2px solid var(--bd)"><b>Liste des produits nécessaires à la pose</b> (préciser les quantités)</div>
+  <div class="prod" id="prod"></div>
+  <div class="sec"><label class="f"><span style="min-width:190px">Câble électrique (type) :</span><input type="text" name="cable"></label></div>
+  <div class="dtu">Vérifier tous les points de réglementation DTU pour la pose de volets roulants</div>
+  <div class="draw">
+    <b>Croquis / dessin</b>
+    <div class="tools edit">
+      <button onclick="setTool('#111',2)">✏️ Noir</button>
+      <button onclick="setTool('#d00',2)">🔴 Rouge</button>
+      <button onclick="setTool('#06c',2)">🔵 Bleu</button>
+      <button onclick="setTool('#fff',18)">🧽 Gomme</button>
+      <button onclick="clearCv()">Tout effacer</button>
+    </div>
+    <canvas id="cv" width="1000" height="500"></canvas>
+  </div>
+  <div class="draw">
+    <b>Photos</b>
+    <div class="noprint edit" style="margin-top:6px">
+      <input type="file" accept="image/*" multiple onchange="addPh(this)">
+    </div>
+    <div id="ph"></div>
+  </div>
+</div>
+</main>
+
+<script>
+const SB_URL='https://nuqoghpyecucdfjoibdd.supabase.co';
+const SB_KEY='sb_publishable_aQVJBiibPB9WLQe8JAhbTw_NucVsEcv';
+
+const $=s=>document.querySelector(s);
+const esc=s=>String(s||'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
+const cb=(n,o)=>`<label class="cb"><input type="checkbox" name="${n}"> ${o}</label>`;
+const PRE=[['des','Désignation de la pièce'],['tab','Tableau recevable (équerrage, aplomb, niveau)',['Oui','Non']],['sup','Supports réguliers, exempts de bosses, creux…',['Oui','Non']],['pose','Type de pose',['A','B','C','D']],['mat','Matière du volet',['PVC','Alu']],['cof','Type de coffre',['1/4 rond','1/2 rond','Pan coupé']],['cou','Coulisses',['Façade','Tableau']],['man','Type de manœuvre',['Éclat','Saillie','1 face','2 faces']]];
+const COTES=[['c1','1 · H. tableau'],['c1b','1* · H. linteau ext. (fixation coffre)'],['c2','2 · L. tableau'],['c3','3 · Profondeur tableau'],['c4','4 · Larg. cochement (pass. sangle 30 mm)'],['c5','5 · Hauteur d’allège']];
+const MOTO=[['ali','Alimentation existante utilisable',['Oui','Non','?']],['alm','Alimentation à modifier ou à créer'],['sai','Pose saillie ou encastr. câble et inter',['Saillie','Encastr.','?']],['dg','Alimentation à droite ou à gauche',['Drt','Gch','?']],['cf','Commande filaire',['Oui','Non','?']],['cr','Commande radio',['Oui','Non','?']]];
+const PROD=[['Fixations mur plein','Fixations mur creux','Autres fixations (préciser)'],['Mastic maçonnerie','Joint d’étanchéité'],['Caches vis','Option protection','Verrous de sécurité']];
+const ROLES={metreur:'Métreur',secretaire:'Secrétaire',poseur:'Poseur'};
+
+let nv=2,cur=null,db=[],photos=[],role=null,ro=false,cal=[],cm=new Date();
+const V=()=>[...Array(nv)].map((_,i)=>i+1);
+const fields=()=>[...document.querySelectorAll('#sheet [name]')];
+function lock(){fields().forEach(f=>f.disabled=ro);$('#conf').disabled=(role!=='secretaire')}
+function confNote(){
+  const c=$('#conf').checked;
+  let t=c?'✅ Confirmée : visible par le poseur':'⏳ Non confirmée : invisible pour le poseur';
+  if(role==='metreur')t+=' (seule la secrétaire peut confirmer)';
+  $('#confnote').textContent=t;
+}
+function cell(v,k,o,mm){
+  const n='v'+v+'_'+k;
+  if(mm)return '<td class="mm"><input type="text" inputmode="decimal" name="'+n+'"> mm</td>';
+  if(o)return '<td>'+o.map(x=>cb(n+'_'+x,x)).join('')+'</td>';
+  return '<td><input type="text" name="'+n+'"></td>';
+}
+function rows(list,mm){return list.map(([k,l,o])=>'<tr><td>'+l+'</td>'+V().map(v=>cell(v,k,o,mm)).join('')+'</tr>').join('')}
+const head=t=>`<tr><th class="t" colspan="${nv+1}">${t}</th></tr>`;
+function build(){$('#tbl').innerHTML=`<tr><th style="text-align:left">Volet</th>${V().map(v=>`<th>${v}</th>`).join('')}</tr>`+head('PRÉALABLE')+rows(PRE)+head('PRISE DE COTES')+rows(COTES,1)+head('MOTORISATION')+rows(MOTO);lock()}
+$('#prod').innerHTML=PROD.map((c,i)=>`<div>${c.map((p,j)=>`<label>${p}<input type="text" name="p_${i}_${j}" placeholder="Qté"></label>`).join('')}</div>`).join('');
+build();
+function setNv(n){const d=collect();nv=Math.max(1,Math.min(8,n));build();setFields(d)}
+
+// ---- Croquis ----
+const cv=$('#cv'),cx=cv.getContext('2d');let col='#111',w=2,down=false;
+const blank=()=>{cx.fillStyle='#fff';cx.fillRect(0,0,cv.width,cv.height)};blank();
+const setTool=(c,s)=>{col=c;w=s};
+const clearCv=()=>{if(confirm('Effacer le croquis ?'))blank()};
+const pos=e=>{const r=cv.getBoundingClientRect();return[(e.clientX-r.left)*cv.width/r.width,(e.clientY-r.top)*cv.height/r.height]};
+cv.onpointerdown=e=>{if(ro)return;down=true;cv.setPointerCapture(e.pointerId);const[x,y]=pos(e);cx.beginPath();cx.moveTo(x,y);cx.lineCap=cx.lineJoin='round';cx.strokeStyle=col;cx.lineWidth=w}
+cv.onpointermove=e=>{if(!down)return;const[x,y]=pos(e);cx.lineTo(x,y);cx.stroke()}
+cv.onpointerup=cv.onpointercancel=()=>down=false;
+
+// ---- Photos ----
+function addPh(inp){[...inp.files].forEach(f=>{const i=new Image();i.onload=()=>{const k=Math.min(1,1000/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=i.width*k;c.height=i.height*k;c.getContext('2d').drawImage(i,0,0,c.width,c.height);photos.push(c.toDataURL('image/jpeg',.65));phs()};i.src=URL.createObjectURL(f)});inp.value=''}
+function phs(){$('#ph').innerHTML=photos.map((p,i)=>`<div class="th"><img src="${p}"><button class="noprint edit" onclick="photos.splice(${i},1);phs()">✕</button></div>`).join('')}
+
+// ---- Connexion Supabase ----
+let ses=JSON.parse(localStorage.getItem('ses')||'null');
+const showLogin=()=>{$('#login').hidden=false;$('#st').textContent='🔒 Non connecté'};
+async function login(){
+  try{
+    const r=await fetch(SB_URL+'/auth/v1/token?grant_type=password',{method:'POST',headers:{apikey:SB_KEY,'Content-Type':'application/json'},body:JSON.stringify({email:$('#em').value,password:$('#pw').value})});
+    const j=await r.json();
+    if(!r.ok){$('#err').textContent=(j.msg||j.error_description||j.message||'Erreur de connexion');return}
+    ses={at:j.access_token,rt:j.refresh_token};localStorage.setItem('ses',JSON.stringify(ses));
+    $('#login').hidden=true;$('#err').textContent='';init();
+  }catch(e){$('#err').textContent='Réseau indisponible : '+e.message}
+}
+function logout(){localStorage.removeItem('ses');ses=null;role=null;document.body.dataset.role='';showLogin()}
+async function refreshTok(){
+  try{const r=await fetch(SB_URL+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{apikey:SB_KEY,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:ses.rt})});
+  if(!r.ok)throw 0;const j=await r.json();ses={at:j.access_token,rt:j.refresh_token};localStorage.setItem('ses',JSON.stringify(ses));return true}
+  catch(e){ses=null;showLogin();return false}
+}
+async function api(path,o={},retry=true){
+  if(!ses){showLogin();throw new Error('Non connecté : reconnectez-vous')}
+  const r=await fetch(SB_URL+'/rest/v1/'+path,{...o,headers:{apikey:SB_KEY,Authorization:'Bearer '+ses.at,'Content-Type':'application/json',...(o.headers||{})}});
+  if(r.status===401&&retry&&await refreshTok())return api(path,o,false);
+  if(!r.ok)throw new Error(await r.text());
+  const t=await r.text();return t?JSON.parse(t):null;
+}
+
+// ---- Rôles ----
+async function init(){
+  try{
+    const p=await api('profils?select=role,nom');
+    role=p&&p[0]?p[0].role:null;
+  }catch(e){$('#st').textContent='🔴 '+e.message;return}
+  document.body.dataset.role=role||'';
+  if(!role){$('#st').textContent='⚠️ Aucun rôle attribué à ce compte';ro=true;document.body.classList.add('ro');return}
+  ro=role==='poseur';
+  document.body.classList.toggle('ro',ro);
+  lock();confNote();
+  await refresh();
+  if(role==='metreur'){nouveau();showView('rt')}else{fill(null);showView('cal')}
+}
+function showView(v){
+  $('#sheet').hidden=v!=='rt';
+  $('#calv').hidden=v!=='cal';
+  if(v==='cal')loadCal();
+  scrollTo(0,0);
+}
+
+// ---- Calendrier ----
+async function loadCal(){
+  try{cal=await api('releves?select=id,client,des,pose_date,pose_heure,confirme&pose_date=not.is.null&order=pose_date');}catch(e){cal=[]}
+  renderCal();
+}
+function moveCal(d){cm=new Date(cm.getFullYear(),cm.getMonth()+d,1);renderCal()}
+function renderCal(){
+  const y=cm.getFullYear(),m=cm.getMonth(),p=n=>String(n).padStart(2,'0');
+  $('#ct').textContent=cm.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
+  const off=(new Date(y,m,1).getDay()+6)%7,nd=new Date(y,m+1,0).getDate();
+  const today=new Date().toISOString().slice(0,10);
+  let h=['L','M','M','J','V','S','D'].map(x=>`<div class="h">${x}</div>`).join('');
+  for(let i=0;i<off;i++)h+='<div></div>';
+  for(let d=1;d<=nd;d++){
+    const k=y+'-'+p(m+1)+'-'+p(d);
+    const ev=cal.filter(e=>e.pose_date===k).sort((a,b)=>(a.pose_heure||'').localeCompare(b.pose_heure||''))
+      .map(e=>`<div class="ev ${e.confirme?'':'w'}" onclick="open_('${esc(e.id)}')">${esc(e.pose_heure)} ${esc(e.client)||'Sans nom'}</div>`).join('');
+    h+=`<div class="j ${k===today?'t':''}"><b>${d}</b>${ev}</div>`;
+  }
+  $('#cg').innerHTML=h;
+}
+
+// ---- Relevés ----
+function collect(){const d={id:cur||Date.now()+'',nv,_ph:photos,_cv:cv.toDataURL('image/png')};fields().forEach(f=>d[f.name]=f.type==='checkbox'?f.checked:f.value);return d}
+function setFields(d){fields().forEach(f=>{const v=d?d[f.name]:undefined;f.type==='checkbox'?f.checked=!!v:f.value=v||''})}
+function fill(d){nv=d&&d.nv||2;build();setFields(d);photos=d&&d._ph?[...d._ph]:[];phs();blank();if(d&&d._cv){const i=new Image();i.onload=()=>cx.drawImage(i,0,0);i.src=d._cv}}
+
+// Liste « Mes relevés » en 2 catégories : validés (date confirmée) / non validés
+const itemHTML=d=>`<div class="item ${d.id===cur?'on':''}" onclick="open_('${esc(d.id)}')"><b>${esc(d.client)||'Sans nom'}</b><br>${esc(d.date)} · ${esc(d.des)}${d.pose_date?'<br>📅 '+esc(d.pose_date)+(d.confirme?' ✅':' ⏳'):''}</div>`;
+const group=(titre,liste,cl)=>`<div class="grp ${cl}"><h4>${titre} <span>${liste.length}</span></h4>${liste.map(itemHTML).join('')||'<small>Aucun</small>'}</div>`;
+async function refresh(){
+  try{
+    db=await api('releves?select=id,client,date,des,pose_date,confirme&order=updated_at.desc');
+    $('#st').textContent='🟢 '+(ROLES[role]||'Connecté');
+    const ok=db.filter(d=>d.confirme&&d.pose_date).sort((a,b)=>a.pose_date.localeCompare(b.pose_date));
+    const ko=db.filter(d=>!(d.confirme&&d.pose_date));
+    $('#list').innerHTML=db.length
+      ? group('✅ Validés (date confirmée)',ok,'ok')+group('⏳ Non validés',ko,'ko')
+      : '<small>Aucun relevé</small>';
+  }catch(e){if(ses)$('#st').textContent='🔴 '+e.message}
+}
+
+function nouveau(){if(role!=='metreur')return;cur=null;fill(null);$('#conf').checked=false;confNote();$('[name=date]').value=new Date().toISOString().slice(0,10);showView('rt');refresh()}
+async function save(){
+  if(ro)return;
+  const d=collect();
+  const body={client:d.client,date:d.date,des:d.v1_des,pose_date:d.pose_date||null,pose_heure:d.pose_heure||null,data:d,updated_at:new Date().toISOString()};
+  if(role==='secretaire')body.confirme=$('#conf').checked&&!!d.pose_date;
+  try{
+    if(cur){
+      const res=await api('releves?id=eq.'+encodeURIComponent(cur),{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify(body)});
+      if(!res||!res.length)throw new Error('Aucune modification enregistrée (droits insuffisants ?)');
+    }else{
+      if(role!=='metreur'){alert('Seul le métreur peut créer un relevé');return}
+      body.id=d.id;
+      await api('releves',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify(body)});
+      cur=d.id;
+    }
+    const c=await api('releves?id=eq.'+encodeURIComponent(cur)+'&select=confirme');
+    $('#conf').checked=!!(c&&c[0]&&c[0].confirme);confNote();
+    await refresh();alert('Relevé enregistré ✅');
+  }catch(e){console.error(e);alert('ERREUR : '+e.message)}
+}
+async function suppr(){if(!ro&&cur&&confirm('Supprimer ce relevé ?')){try{await api('releves?id=eq.'+encodeURIComponent(cur),{method:'DELETE'});if(role==='metreur')nouveau();else{cur=null;fill(null);await refresh();showView('cal')}}catch(e){alert('ERREUR : '+e.message)}}}
+async function open_(id){try{const r=await api('releves?id=eq.'+encodeURIComponent(id)+'&select=data,confirme');cur=id;fill(r[0].data);$('#conf').checked=!!r[0].confirme;confNote();showView('rt');if(!ro)refresh()}catch(e){alert('ERREUR : '+e.message)}}
+function dl(data,name){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data)],{type:'application/json'}));a.download=name+'-'+new Date().toISOString().slice(0,10)+'.json';a.click()}
+async function exportJSON(){try{dl((await api('releves?select=data')).map(x=>x.data),'sauvegarde-releves')}catch(e){alert('ERREUR : '+e.message)}}
+
+if(ses)init();else{showLogin()}
+</script>
+</body>
+</html>
